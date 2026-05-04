@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Auth App</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .auth-container { background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        .tabs { display: flex; margin-bottom: 20px; border-bottom: 2px solid #eee; }
+        .tab { flex: 1; text-align: center; padding: 10px; cursor: pointer; font-weight: bold; color: #777; }
+        .tab.active { color: #0066cc; border-bottom: 2px solid #0066cc; margin-bottom: -2px; }
+        .form-view { display: none; }
+        .form-view.active { display: block; }
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; margin-bottom: 5px; font-size: 14px; color: #333; }
+        .input-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .btn-primary { width: 100%; padding: 10px; background-color: #0066cc; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; font-weight: bold; }
+        .btn-primary:hover { background-color: #005bb5; }
+        .btn-google { background-color: white; color: #444; border: 1px solid #ccc; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .btn-google:hover { background-color: #f9f9f9; }
+        .divider { text-align: center; margin: 20px 0; color: #777; font-size: 14px; position: relative; }
+        .divider::before, .divider::after { content: ""; position: absolute; top: 50%; width: 40%; height: 1px; background-color: #ccc; }
+        .divider::before { left: 0; }
+        .divider::after { right: 0; }
+        #message-box { display: none; padding: 15px; margin-bottom: 15px; border-radius: 4px; font-size: 14px; text-align: center; }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+
+    <div class="auth-container">
+        
+        <div class="tabs">
+            <div class="tab active" id="tab-login">Login</div>
+            <div class="tab" id="tab-register">Register</div>
+        </div>
+
+        <div id="message-box"></div>
+
+        <div id="login-view" class="form-view active">
+            <form id="login-form">
+                <div class="input-group">
+                    <label>Email</label>
+                    <input type="email" id="login-email" required>
+                </div>
+                <div class="input-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" required>
+                </div>
+                <button type="submit" class="btn-primary">Login</button>
+            </form>
+
+            <div class="divider">OR</div>
+
+            <button type="button" id="btn-google-login" class="btn-primary btn-google">
+                <img src="https://www.svgrepo.com/show/475656/google-color.svg" width="20" alt="Google">
+                Continue with Google
+            </button>
+        </div>
+
+        <div id="register-view" class="form-view">
+            <form id="register-form">
+                <div class="input-group">
+                    <label>Email</label>
+                    <input type="email" id="reg-email" required>
+                </div>
+                <div class="input-group">
+                    <label>Password</label>
+                    <input type="password" id="reg-password" required minlength="6">
+                </div>
+                <div class="input-group">
+                    <label>Confirm Password</label>
+                    <input type="password" id="reg-confirm-password" required minlength="6">
+                </div>
+                <button type="submit" class="btn-primary">Create Account</button>
+            </form>
+        </div>
+
+    </div>
+
+    <script type="module">
+        // 1. Import Firebase SDKs
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
+        import { 
+            getAuth, 
+            createUserWithEmailAndPassword, 
+            signInWithEmailAndPassword, 
+            sendEmailVerification, 
+            GoogleAuthProvider, 
+            signInWithPopup, 
+            signOut 
+        } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+
+        // 2. PASTE YOUR FIREBASE CONFIG HERE
+        import { firebaseConfig } from './config.js';
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const googleProvider = new GoogleAuthProvider();
+
+        // --- UI Logic (Tabs & Messages) ---
+        const msgBox = document.getElementById('message-box');
+        function showMessage(msg, type) {
+            msgBox.innerHTML = msg;
+            msgBox.className = type;
+            msgBox.style.display = 'block';
+        }
+
+        document.getElementById('tab-login').addEventListener('click', () => {
+            document.getElementById('tab-login').classList.add('active');
+            document.getElementById('tab-register').classList.remove('active');
+            document.getElementById('login-view').classList.add('active');
+            document.getElementById('register-view').classList.remove('active');
+            msgBox.style.display = 'none';
+        });
+
+        document.getElementById('tab-register').addEventListener('click', () => {
+            document.getElementById('tab-register').classList.add('active');
+            document.getElementById('tab-login').classList.remove('active');
+            document.getElementById('register-view').classList.add('active');
+            document.getElementById('login-view').classList.remove('active');
+            msgBox.style.display = 'none';
+        });
+
+        // --- Firebase Register with Email Verification ---
+        document.getElementById('register-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('reg-email').value;
+            const pass = document.getElementById('reg-password').value;
+            const confirmPass = document.getElementById('reg-confirm-password').value;
+
+            if (pass !== confirmPass) {
+                return showMessage('Passwords do not match.', 'error');
+            }
+
+            createUserWithEmailAndPassword(auth, email, pass)
+                .then((userCredential) => {
+                    // Send the verification email immediately
+                    sendEmailVerification(userCredential.user)
+                        .then(() => {
+                            showMessage(`Success! A verification link has been sent to <strong>${email}</strong>. Please check your inbox before logging in.`, 'success');
+                            // Log them out so they are forced to verify before accessing the app
+                            signOut(auth);
+                            e.target.reset(); // clear form
+                        });
+                })
+                .catch((error) => showMessage(error.message, 'error'));
+        });
+
+        // --- Firebase Standard Login (Enforcing Verification) ---
+        document.getElementById('login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const pass = document.getElementById('login-password').value;
+
+            signInWithEmailAndPassword(auth, email, pass)
+                .then((userCredential) => {
+                    // CHECK IF EMAIL IS VERIFIED
+                    if (userCredential.user.emailVerified) {
+                        showMessage(`Welcome back! You are logged in.`, 'success');
+                        // Here you would normally redirect them to the dashboard: window.location.href = '/dashboard';
+                    } else {
+                        showMessage('Please verify your email address before logging in. Check your inbox.', 'error');
+                        signOut(auth); // Kick them out if not verified
+                    }
+                })
+                .catch((error) => showMessage("Invalid email or password.", 'error'));
+        });
+
+        // --- Firebase Google Login ---
+        document.getElementById('btn-google-login').addEventListener('click', () => {
+            signInWithPopup(auth, googleProvider)
+                .then((result) => {
+                    showMessage(`Logged in with Google as ${result.user.displayName}!`, 'success');
+                    // Google accounts are inherently verified, so no need to check emailVerified
+                })
+                .catch((error) => showMessage(error.message, 'error'));
+        });
+    </script>
+</body>
+</html>
